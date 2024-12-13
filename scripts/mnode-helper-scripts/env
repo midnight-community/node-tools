@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+######################################
+# User Variables - Change as desired #
+# Leave as is if unsure              #
+######################################
+
+# Midnight Node Variables
+#MNODE_HOME="/opt/midnight/mnode"
+#MNODE_PORT=30333
+
+# Common Variables
+#BLOCKLOG_DIR="${MNODE_HOME}/guild-db/blocklog"         # Override default directory used to store block data for core node
+#BLOCKLOG_TZ="UTC"
+
+# Container Variables - Uncomment and modify as needed
+#CONTAINER_NAME="midnight-node-docker_midnight-node-testnet_1"
+#CONTAINER_RUNTIME="docker-compose"
+#CONTAINER_RUNTIME_ARGS="exec -it ${CONTAINER_NAME}"
+#CONTAINER_RUNTIME_CMD="${CONTAINER_RUNTIME} ${CONTAINER_RUNTIME_ARGS} ${CONTAINER_NAME}"
+
+######################################
+# Do not modify code below this line #
+######################################
+
+# Functions
+set_default_vars() {
+    # shellcheck disable=SC2086
+    [[ -z "${MNODE_HOME}" ]] && MNODE_HOME="$(readlink -f ${PARENT}/..)"
+    [[ -z "${MNODE_PORT}" ]] && MNODE_PORT=30333
+    if [[ -n ${CONTAINER_RUNTIME} ]] ; then
+        [[ -z ${CONTAINER_NAME} ]] && CONTAINER_NAME="midnight-node-docker_midnight-node-testnet_1"
+        [[ -z ${CONTAINER_RUNTIME_ARGS} ]] && CONTAINER_RUNTIME_ARGS="exec -it ${CONTAINER_NAME}"
+        [[ -z ${CONTAINER_RUNTIME_CMD} ]] && CONTAINER_RUNTIME_CMD="${CONTAINER_RUNTIME} ${CONTAINER_RUNTIME_ARGS} ${CONTAINER_NAME}"
+    fi
+}
+
+######################################
+
+# Main code
+[[ ${0} != '-bash' ]] && PARENT=$(dirname $0) || PARENT="$(pwd)" # If sourcing at terminal, $0 would be "-bash" , which is invalid. Thus, fallback to present working directory
+
+set_default_vars
+
+[[ -z ${BLOCKLOG_DIR} ]] && BLOCKLOG_DIR="${MNODE_HOME}/guild-db/blocklog"
+BLOCKLOG_DB="${BLOCKLOG_DIR}/blocklog.db"
+[[ -z ${BLOCKLOG_TZ} ]] && BLOCKLOG_TZ="UTC"
+# node_version="$(${CONTAINER_RUNTIME_CMD} "${CNODEBIN}" version | head -1 | cut -d' ' -f2)"
