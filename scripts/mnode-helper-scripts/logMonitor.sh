@@ -75,7 +75,7 @@ create_blocklog_db() {
 				CREATE TABLE blocklog (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, epoch INTEGER NOT NULL, slot INTEGER NOT NULL, block INTEGER NOT NULL DEFAULT 0, ancestor_block INTEGER NOT NULL DEFAULT 0, to_block INTEGER NOT NULL DEFAULT 0, hash TEXT NOT NULL DEFAULT '', status TEXT NOT NULL);
 				CREATE INDEX idx_blocklog_epoch ON blocklog (epoch);
 				CREATE INDEX idx_blocklog_status ON blocklog (status);
-				CREATE TABLE epochdata (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, epoch INTEGER NOT NULL, start_block INTEGER NOT NULL, chain_density TEXT, UNIQUE(epoch, at, start_block));
+				CREATE TABLE epochdata (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, epoch INTEGER NOT NULL, start_block INTEGER NOT NULL, chain_density FLOAT, UNIQUE(epoch, at, start_block));
 				CREATE INDEX idx_epochdata_epoch ON epochdata (epoch);
 				CREATE INDEX idx_start_block ON epochdata (start_block);
 				PRAGMA user_version = 1;
