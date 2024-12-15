@@ -40,7 +40,8 @@ usage() {
     echo "  -d              Run in daemon mode."
     echo "  -i              Initialize blocklog DB (deletes existing blocklog DB and syncs available logs)."
     echo "  -c [container]  Use container runtime (docker, podman, or docker-compose) to follow logs. Default: docker-compose."
-    echo "  -j [service]     Use journald (journalctl) to follow logs."
+    echo '  -r [runtime]    Specify container runtime (docker, podman, or docker-compose). Default: docker-compose.'
+    echo "  -j [service]    Use journald (journalctl) to follow Systemd logs."
     echo "  -D              Deploy Midnight Node Log Monitor Systemd service."
 }
 
