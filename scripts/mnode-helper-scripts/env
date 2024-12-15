@@ -42,7 +42,7 @@ set_default_vars() {
 
 set_default_vars
 
-[[ -z ${BLOCKLOG_DIR} ]] && BLOCKLOG_DIR="${MNODE_HOME}/guild-db/blocklog"
+[[ -z ${BLOCKLOG_DIR} ]] && BLOCKLOG_DIR="${MNODE_HOME}/tools-db/blocklog"
 BLOCKLOG_DB="${BLOCKLOG_DIR}/blocklog.db"
 [[ -z ${BLOCKLOG_TZ} ]] && BLOCKLOG_TZ="UTC"
 # node_version="$(${CONTAINER_RUNTIME_CMD} "${CNODEBIN}" version | head -1 | cut -d' ' -f2)"
