@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034
 
 ######################################
 # User Variables - Change as desired #
@@ -38,7 +39,7 @@ set_default_vars() {
 ######################################
 
 # Main code
-[[ ${0} != '-bash' ]] && PARENT=$(dirname $0) || PARENT="$(pwd)" # If sourcing at terminal, $0 would be "-bash" , which is invalid. Thus, fallback to present working directory
+[[ ${0} != '-bash' ]] && PARENT=$(dirname "$0") || PARENT="$(pwd)" # If sourcing at terminal, $0 would be "-bash" , which is invalid. Thus, fallback to present working directory
 
 set_default_vars
 

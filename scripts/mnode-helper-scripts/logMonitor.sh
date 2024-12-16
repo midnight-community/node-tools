@@ -30,6 +30,7 @@ epoch=""
 epoch_start_at=""
 current_epoch=""
 no_epoch_count=0
+verbosity=0
 
 # Function to display usage
 # return: void
@@ -37,11 +38,12 @@ usage() {
     echo "Usage: $0 [OPTIONS] [service|container]"
     echo "Options:"
     echo "  -h              Display this help message."
+    echo "  -c [container]  Use container runtime (docker, podman, or docker-compose) to follow logs. Default: docker-compose."
     echo "  -d              Run in daemon mode."
     echo "  -i              Initialize blocklog DB (deletes existing blocklog DB and syncs available logs)."
-    echo "  -c [container]  Use container runtime (docker, podman, or docker-compose) to follow logs. Default: docker-compose."
-    echo '  -r [runtime]    Specify container runtime (docker, podman, or docker-compose). Default: docker-compose.'
     echo "  -j [service]    Use journald (journalctl) to follow Systemd logs."
+    echo "  -r [runtime]    Specify container runtime (docker, podman, or docker-compose). Default: docker-compose."
+    echo "  -v              Verbose mode. Multiple -v options increase verbosity."
     echo "  -D              Deploy Midnight Node Log Monitor Systemd service."
 }
 
@@ -62,13 +64,13 @@ calculate_epoch_stats() {
   # Update the epochdata table with the calculated chain_density
   sqlite3 "${BLOCKLOG_DB}" "UPDATE epochdata SET chain_density = '${chain_density}' WHERE epoch = ${working_epoch};"
   
-  echo "[INFO] Calculated chain density for epoch ${working_epoch}: ${chain_density}%"
+  log_output "INFO" "Calculated chain density for epoch ${working_epoch}: ${chain_density}%"
 }
 
 # Function to create blocklog DB
 # return: int
 create_blocklog_db() {
-    if ! mkdir -p "${BLOCKLOG_DIR}" 2>/dev/null; then echo "[ERROR] failed to create directory to store blocklog: ${BLOCKLOG_DIR}" && return 1; fi
+    if ! mkdir -p "${BLOCKLOG_DIR}" 2>/dev/null; then echo "Error: failed to create directory to store blocklog: ${BLOCKLOG_DIR}" && return 1; fi
     
     rm -f ${BLOCKLOG_DB}
     if ! sqlite3 ${BLOCKLOG_DB} <<-EOF
@@ -81,7 +83,7 @@ create_blocklog_db() {
 				PRAGMA user_version = 1;
 				EOF
     then
-        echo "[ERROR] failed to create blocklog DB: ${BLOCKLOG_DB}"
+        echo "Error: failed to create blocklog DB: ${BLOCKLOG_DB}"
         return 1
     else
       echo "SQLite blocklog DB created: ${BLOCKLOG_DB}"
@@ -94,13 +96,18 @@ deploy_monitoring_service() {
   local after="After=network-online.target"
   local binds_to=""
   local exec_start=""
+  local verbosity_flags=""
+
+  for ((i=0; i<verbosity; i++)); do
+    verbosity_flags+=" -v"
+  done
 
   if $use_journald; then
     after+=" ${target}.service"
     binds_to="BindsTo=${target}.service"
-    exec_start="/bin/bash -l -c \"./logMonitor.sh -d -j ${target}\""
+    exec_start="/bin/bash -l -c \"./logMonitor.sh ${verbosity_flags} -d -j ${target}\""
   elif $use_container; then
-    exec_start="/bin/bash -l -c \"./logMonitor.sh -d -c ${target}\""
+    exec_start="/bin/bash -l -c \"./logMonitor.sh ${verbosity_flags} -d -c ${target}\""
   else
     echo "Error: Either -j or -c must be specified with -D."
     exit 1
@@ -170,7 +177,6 @@ get_lost_blocks() {
 
   # Check if the length of the array is greater than 0
   if [[ ${#sorted_unique_blocks[@]} -gt 0 ]]; then
-    #echo "[WARNING] Lost block due to reorg in epoch ${epoch} at ${at}"
     log_output "WARNING" "Lost block due to reorg in epoch ${epoch}" "${at}"
   fi
 }
@@ -184,7 +190,15 @@ get_slot() {
   echo ${slot}
 }
 
+# Function to output log messages
+# return: void
+
 log_output() {
+  # The global verbosity variable is used to determine the level of logging output.
+  # The verbosity levels are as follows:
+  # 0: Only errors are logged
+  # 1: Errors and warnings are logged
+  # 2: Errors, warnings, and info messages are logged
   local log_level=$1
   local message=$2
   local timestamp
@@ -195,10 +209,14 @@ log_output() {
   fi
   case $log_level in
     "INFO")
-      echo "[INFO] ${timestamp}${message}"
+      if [[ ${verbosity} -gt 1 ]]; then
+        echo "[INFO] ${timestamp}${message}"
+      fi
       ;;
     "WARNING")
-      echo "[WARNING] ${timestamp}${message}"
+      if [[ ${verbosity} -gt 0 ]]; then
+        echo "[WARNING] ${timestamp}${message}"
+      fi
       ;;
     "ERROR")
       echo "[ERROR] ${timestamp}${message}"
@@ -211,9 +229,11 @@ log_output() {
 
 # Function to print no epoch error
 # return: string
+# This function is used to log a warning message when the epoch or epoch_start_at are not set.
+# The function logs the message every 100th time the function is called or when the function is
+# called for the first time.
 log_no_epoch() {
-  if [[ $((no_epoch_count % 100)) -eq 0 ]] || [[ ${no_epoch_count} -eq 1 ]]; then
-    #echo "${1} at ${2}, count ${no_epoch_count}"
+  if [[ $((no_epoch_count % 100)) -eq 0 ]]; then
     log_output "WARNING" "${1}" "${2}"
   fi
   no_epoch_count=$((no_epoch_count + 1))
@@ -224,7 +244,7 @@ log_no_epoch() {
 # return: void
 parse_options() {
   # Parse options
-  while getopts ":c:dhij:r:D" opt; do
+  while getopts ":c:dhij:r:vD" opt; do
     case $opt in
       d)
         DAEMON=true
@@ -256,6 +276,9 @@ parse_options() {
       D)
         deploy_service=true
         ;;
+      v)
+        verbosity=$((verbosity + 1))
+        ;;
       h)
         usage
         exit 0
@@ -276,6 +299,11 @@ parse_options() {
   if $use_journald && $use_container; then
     echo "Error: Cannot use both -j and -c options simultaneously."
     usage
+  fi
+
+  # User verbosity level
+  if [[ $verbosity -gt 0 ]]; then
+    log_output "INFO" "Verbosity level: $verbosity"
   fi
 }
 
@@ -313,6 +341,7 @@ process_logs() {
             if [[ -z ${existing_start_block} ]]; then
               # Insert a new entry for the epoch when there is no existing entry
               sqlite3 "${BLOCKLOG_DB}" "INSERT INTO epochdata (epoch, start_block,at ) VALUES (${epoch}, ${start_block}, '${at}');"
+              log_output "INFO" "Epoch ${epoch} start block: ${start_block}" "${at}"
             else
               if [[ ${start_block} -lt ${existing_start_block} ]]; then
                 # Update the entry with the new start block when the new start block is less than the existing start block
@@ -343,7 +372,6 @@ process_logs() {
                 log_output "INFO" "Pre-sealed block number: ${presealed_block}, slot: ${slot}" "${at}"
                 if [[ -n "${epoch}" ]] && [[ -n "${epoch_start_at}" ]]; then
                   sqlite3 "${BLOCKLOG_DB}" "INSERT INTO blocklog (epoch, slot, block, status, at) values (${epoch}, ${slot}, ${presealed_block}, 'presealed', '${at}');"
-                  echo "Inserted pre-sealed block number: ${presealed_block} at ${at}, slot: ${slot}"
                 else
                   log_no_epoch "The epoch or epoch_start_at are not set, logging will commence at start of next epoch." "${at}"
                 fi
@@ -356,6 +384,10 @@ process_logs() {
                 slot=$(get_slot $at_seconds $epoch_start_at_seconds)
                 if [[ -n "${epoch}" ]] && [[ -n "${epoch_start_at}" ]]; then
                   sqlite3 "${BLOCKLOG_DB}" "INSERT INTO blocklog (epoch, slot, block, status, at) values (${epoch}, ${slot}, ${imported_block}, 'imported', '${at}');"
+                  if [[ ${verbosity} -gt 2 ]]; then
+                      # verbosity level 3: Errors, warnings, info messages, including Imported block numbers and slots are logged.
+                    log_output "INFO" "Imported block number: ${imported_block}, slot: ${slot}" "${at}"
+                  fi
                 else
                   log_no_epoch "The epoch or epoch_start_at are not set, logging will commence at start of next epoch." "${at}"
                 fi
